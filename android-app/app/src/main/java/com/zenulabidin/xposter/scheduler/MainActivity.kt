@@ -155,9 +155,9 @@ class MainActivity : AppCompatActivity(), PostReplyAdapter.PostActionListener {
                     response?.let { repliesResponse ->
                         if (repliesResponse.hasChanges) {
                             // Filter out processed posts
-                            val newPosts = repliesResponse.replies.filter { post ->
+                            val newPosts = repliesResponse.replies?.filter { post ->
                                 !processedIds.contains(post.id)
-                            }
+                            } ?: emptyList()
 
                             posts.clear()
                             posts.addAll(newPosts)
