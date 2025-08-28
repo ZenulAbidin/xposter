@@ -1,0 +1,578 @@
+{
+  "name": "X Post Processing - Main Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 30 minutes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "bucketName": "your-bucket-name",
+        "fileName": "topics.json"
+      },
+      "id": "gcs-download-topics",
+      "name": "GCS Download Topics",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "bucketName": "your-bucket-name",
+        "fileName": "for_you_posts.json"
+      },
+      "id": "gcs-download-posts",
+      "name": "GCS Download Posts",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const topics = $input.first().json?.topics || ['AI', 'Crypto', 'Bitcoin', 'Ethereum', 'Motivation', 'Machine Learning'];\nconst postsData = $input.last().binary?.data;\n\nlet posts = [];\nif (postsData) {\n  const postsJson = Buffer.from(postsData, 'base64').toString('utf8');\n  posts = JSON.parse(postsJson);\n}\n\nconst itemsToProcess = posts.map(post => ({\n  post,\n  topics: topics.join(', ')\n}));\n\nreturn itemsToProcess.map(item => ({ json: item }));"
+      },
+      "id": "prepare-loop-items",
+      "name": "Prepare Loop Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {},
+      "id": "split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-photo-media",
+              "leftValue": "={{ $json.post.media.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-media",
+      "name": "Check Has Media",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.post.media[0].url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "binaryData"
+            }
+          }
+        }
+      },
+      "id": "fetch-image",
+      "name": "Fetch Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "base64-image",
+              "name": "imageBase64",
+              "value": "={{ $binary.data.data }}",
+              "type": "string"
+            },
+            {
+              "id": "mime-type",
+              "name": "imageMimeType",
+              "value": "image/jpeg",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-image-data",
+      "name": "Set Image Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "={{ JSON.stringify([{\n  \"parts\": [\n    {\n      \"text\": \"Classify and score this social media post based on these topics: \" + $json.topics + \". Content: \" + $json.post.content + \". Rate relevance 0-100. Format: Categories: [list]. Score: N.\"\n    },\n    $json.imageMimeType ? {\n      \"inline_data\": {\n        \"mime_type\": $json.imageMimeType,\n        \"data\": $json.imageBase64\n      }\n    } : null\n  ].filter(Boolean)\n}]) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gemini-classification",
+      "name": "Gemini Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "={{ JSON.stringify([{\n  \"parts\": [\n    {\n      \"text\": \"Classify and score this social media post based on these topics: \" + $json.topics + \". Content: \" + $json.post.content + \". Rate relevance 0-100. Format: Categories: [list]. Score: N.\"\n    }\n  ]\n}]) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gemini-classification-no-image",
+      "name": "Gemini Classification (No Image)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet score = 0;\nlet categories = [];\n\nif (response.candidates && response.candidates[0]) {\n  const text = response.candidates[0].content.parts[0].text;\n  \n  const scoreMatch = text.match(/Score:\\s*(\\d+)/i);\n  if (scoreMatch) {\n    score = parseInt(scoreMatch[1]);\n  }\n  \n  const categoriesMatch = text.match(/Categories:\\s*\\[([^\\]]+)\\]/i);\n  if (categoriesMatch) {\n    categories = categoriesMatch[1].split(',').map(c => c.trim());\n  }\n}\n\nreturn [{\n  json: {\n    ...($input.first().json),\n    score,\n    categories,\n    classification_response: response\n  }\n}];"
+      },
+      "id": "parse-classification",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 50,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-score",
+      "name": "Check Score >= 50",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "={{ JSON.stringify([{\n  \"parts\": [\n    {\n      \"text\": \"Generate a thoughtful 50-150 character reply to this post. Be engaging and on-topic. Post: \" + $json.post.content + ($json.imageMimeType ? \" [Image present]\" : \"\")\n    },\n    $json.imageMimeType ? {\n      \"inline_data\": {\n        \"mime_type\": $json.imageMimeType,\n        \"data\": $json.imageBase64\n      }\n    } : null\n  ].filter(Boolean)\n}]) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-reply",
+      "name": "Generate Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "reply-data",
+              "name": "processedPost",
+              "value": "={{ {\n  ...($json.post),\n  score: $json.score,\n  categories: $json.categories,\n  reply: $json.reply_response?.candidates?.[0]?.content?.parts?.[0]?.text || '',\n  image_description: $json.imageMimeType ? 'Image present' : null,\n  processed_at: new Date().toISOString(),\n  status: 'ready'\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-processed-post",
+      "name": "Set Processed Post",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "reply-response",
+              "name": "reply_response",
+              "value": "={{ $input.first().json }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge-reply-response",
+      "name": "Merge Reply Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [2660, 200]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "replies",
+        "options": {}
+      },
+      "id": "aggregate-replies",
+      "name": "Aggregate Replies",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [3100, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "final-output",
+              "name": "output",
+              "value": "={{ {\n  replies: $json.replies.map(item => item.processedPost).filter(post => post.reply && post.reply.length > 0),\n  last_updated: new Date().toISOString(),\n  total_processed: $json.replies.length\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-final-output",
+      "name": "Format Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [3320, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "bucketName": "your-bucket-name",
+        "fileName": "replies.json",
+        "fileContent": "={{ JSON.stringify($json.output, null, 2) }}",
+        "options": {
+          "makePublic": false
+        }
+      },
+      "id": "gcs-upload-replies",
+      "name": "GCS Upload Replies",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [3540, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 30 minutes": {
+      "main": [
+        [
+          {
+            "node": "GCS Download Topics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GCS Download Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCS Download Topics": {
+      "main": [
+        [
+          {
+            "node": "Prepare Loop Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCS Download Posts": {
+      "main": [
+        [
+          {
+            "node": "Prepare Loop Items",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Prepare Loop Items": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Check Has Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Has Media": {
+      "main": [
+        [
+          {
+            "node": "Fetch Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Classification (No Image)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Image": {
+      "main": [
+        [
+          {
+            "node": "Set Image Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Image Data": {
+      "main": [
+        [
+          {
+            "node": "Gemini Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Classification": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Classification (No Image)": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Check Score >= 50",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Score >= 50": {
+      "main": [
+        [
+          {
+            "node": "Generate Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reply": {
+      "main": [
+        [
+          {
+            "node": "Merge Reply Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Reply Response": {
+      "main": [
+        [
+          {
+            "node": "Set Processed Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Processed Post": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Replies": {
+      "main": [
+        [
+          {
+            "node": "Format Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Output": {
+      "main": [
+        [
+          {
+            "node": "GCS Upload Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "x-post-automation"
+  },
+  "id": "1",
+  "tags": []
+}

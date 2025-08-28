@@ -1,0 +1,33 @@
+// Root build file for XPoster multi-component project
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+    id 'com.android.library' version '8.2.0' apply false
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+// Task to build Android app
+task buildAndroid {
+    dependsOn ':android-app:app:assembleDebug'
+    group = 'build'
+    description = 'Build the Android application'
+}
+
+// Task to build all components (extend as needed for other components)
+task buildAll {
+    dependsOn buildAndroid
+    group = 'build'
+    description = 'Build all project components'
+}</content>
+</xai:function_call name="write">
+<parameter name="filePath">/home/zenulabidin/Documents/xposter/settings.gradle

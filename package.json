@@ -1,0 +1,43 @@
+{
+  "name": "xposter-automation-system",
+  "version": "1.0.0",
+  "description": "Complete X (Twitter) post automation system with AI-powered reply generation",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "validate-config": "node scripts/validate-config.js",
+    "start:electron": "cd electron-app && npm start",
+    "build:electron": "cd electron-app && npm run build",
+    "start:android": "cd android-app && ./gradlew assembleDebug",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "x",
+    "twitter",
+    "automation",
+    "ai",
+    "gemini",
+    "social-media",
+    "chrome-extension",
+    "electron",
+    "android",
+    "n8n"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/xposter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/xposter/issues"
+  },
+  "homepage": "https://github.com/yourusername/xposter#readme",
+  "devDependencies": {
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

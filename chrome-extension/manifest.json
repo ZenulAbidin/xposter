@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "X Post Capture",
+  "version": "1.0",
+  "description": "Capture X posts from For You page for automated engagement",
+  "permissions": [
+    "debugger",
+    "storage",
+    "cookies",
+    "downloads",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.x.com/*",
+    "*://*.twitter.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://x.com/home", "*://twitter.com/home"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "X Post Capture"
+  }
+}

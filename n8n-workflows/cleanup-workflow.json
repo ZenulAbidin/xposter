@@ -1,0 +1,321 @@
+{
+  "name": "X Post Cleanup - Stale Replies",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "cronExpression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-cleanup-trigger",
+      "name": "Daily at 00:00 UTC",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "bucketName": "your-bucket-name",
+        "fileName": "replies.json"
+      },
+      "id": "gcs-get-replies",
+      "name": "GCS Get Replies",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [460, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "parse-json",
+              "name": "repliesData",
+              "value": "={{ JSON.parse(Buffer.from($binary.data.data, 'base64').toString('utf8')) }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "binary-to-json",
+      "name": "Binary to JSON",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const repliesData = $json.repliesData;\nconst twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);\n\nif (!repliesData || !repliesData.replies) {\n  return [{ json: { filteredReplies: [], shouldUpdate: false, originalCount: 0, filteredCount: 0 } }];\n}\n\nconst filteredReplies = repliesData.replies.filter(reply => {\n  const createdAt = new Date(reply.created_at);\n  return createdAt > twoDaysAgo;\n});\n\nconst shouldUpdate = filteredReplies.length !== repliesData.replies.length;\nconst shouldDelete = filteredReplies.length === 0;\n\nreturn [{\n  json: {\n    filteredReplies,\n    shouldUpdate,\n    shouldDelete,\n    originalCount: repliesData.replies.length,\n    filteredCount: filteredReplies.length,\n    last_updated: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "filter-stale-replies",
+      "name": "Filter Stale Replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-delete-check",
+              "leftValue": "={{ $json.shouldDelete }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-should-delete",
+      "name": "Check Should Delete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "delete",
+        "bucketName": "your-bucket-name",
+        "fileName": "replies.json"
+      },
+      "id": "gcs-delete-replies",
+      "name": "GCS Delete Replies",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-update-check",
+              "leftValue": "={{ $json.shouldUpdate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-should-update",
+      "name": "Check Should Update",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "updated-data",
+              "name": "updatedRepliesData",
+              "value": "={{ {\n  replies: $json.filteredReplies,\n  last_updated: $json.last_updated,\n  total_processed: $json.filteredCount,\n  cleanup_performed: true\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-updated-data",
+      "name": "Format Updated Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "bucketName": "your-bucket-name",
+        "fileName": "replies.json",
+        "fileContent": "={{ JSON.stringify($json.updatedRepliesData, null, 2) }}",
+        "options": {
+          "makePublic": false
+        }
+      },
+      "id": "gcs-update-replies",
+      "name": "GCS Update Replies",
+      "type": "n8n-nodes-base.googleCloudStorage",
+      "typeVersion": 1,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cleanup-summary",
+              "name": "cleanupSummary",
+              "value": "={{ {\n  action: $json.shouldDelete ? 'deleted_empty_file' : ($json.shouldUpdate ? 'updated_file' : 'no_action_needed'),\n  original_count: $json.originalCount,\n  filtered_count: $json.filteredCount,\n  removed_count: $json.originalCount - $json.filteredCount,\n  cleanup_date: new Date().toISOString()\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cleanup-summary",
+      "name": "Cleanup Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [2000, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily at 00:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "GCS Get Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCS Get Replies": {
+      "main": [
+        [
+          {
+            "node": "Binary to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Binary to JSON": {
+      "main": [
+        [
+          {
+            "node": "Filter Stale Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Stale Replies": {
+      "main": [
+        [
+          {
+            "node": "Check Should Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Should Delete": {
+      "main": [
+        [
+          {
+            "node": "GCS Delete Replies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Should Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCS Delete Replies": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Should Update": {
+      "main": [
+        [
+          {
+            "node": "Format Updated Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cleanup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Updated Data": {
+      "main": [
+        [
+          {
+            "node": "GCS Update Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GCS Update Replies": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "x-post-cleanup"
+  },
+  "id": "2",
+  "tags": []
+}

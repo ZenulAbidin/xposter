@@ -1,0 +1,102 @@
+# API Keys and Credentials
+key.json
+service-account-key.json
+*.pem
+*.p12
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Configuration with secrets
+config/secrets.json
+config/production.json
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+*.tgz
+
+# Electron
+electron-app/dist/
+electron-app/build/
+
+# Android
+android-app/build/
+android-app/app/build/
+android-app/.gradle/
+android-app/local.properties
+android-app/keystore.jks
+android-app/app/src/main/assets/key.json
+
+# Chrome Extension temporary files
+chrome-extension/key.json
+chrome-extension/*.crx
+chrome-extension/*.pem
+
+# n8n
+n8n-data/
+.n8n/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Data files (don't commit user data)
+data/
+uploads/
+downloads/
+for_you_posts.json
+cookies_x.json
+replies.json
+topics.json
+
+# Test files
+test-data/
+mock-data/
+
+# Documentation build
+docs/build/
+
+# Backup files
+*.bak
+*.backup

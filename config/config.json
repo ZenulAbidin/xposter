@@ -1,0 +1,48 @@
+{
+  "gcs": {
+    "bucketName": "your-bucket-name",
+    "projectId": "your-project-id",
+    "keyFilePath": "./key.json"
+  },
+  "gemini": {
+    "apiKey": "your_gemini_api_key",
+    "model": "gemini-2.5-flash-lite",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta"
+  },
+  "topics": {
+    "predefined": [
+      "AI",
+      "Crypto",
+      "Bitcoin",
+      "Ethereum", 
+      "Motivation",
+      "Machine Learning",
+      "Blockchain",
+      "Self-Improvement",
+      "Tech Innovation",
+      "Programming",
+      "Science",
+      "Gaming",
+      "Environment",
+      "Finance",
+      "Health & Wellness"
+    ],
+    "maxCustomTopics": 10
+  },
+  "posting": {
+    "minDelaySeconds": 15,
+    "maxDelaySeconds": 45,
+    "maxPostsPerDay": 400,
+    "scoreThreshold": 50
+  },
+  "filtering": {
+    "maxPostAgeHours": 48,
+    "minReplyLength": 50,
+    "maxReplyLength": 150
+  },
+  "polling": {
+    "intervalMinutes": 3,
+    "n8nProcessingIntervalMinutes": 30,
+    "cleanupIntervalHours": 24
+  }
+}
